@@ -1,22 +1,38 @@
 /**
- * Grafana HTML Graphics - Leaflet Map Logic
+ * Grafana HTML Graphics - Leaflet Map Logic (클릭 팝업 제거 버전)
  */
-export function renderMap(context, L) {
-  const { data, grafana, element } = context;
+export async function renderMap({ series, grafana, element }) {
+  // 1. 라이브러리 동적 로드
+  const [{ default: L }] = await Promise.all([
+    import("https://esm.sh/leaflet"),
+    import("https://esm.sh/leaflet.awesome-markers"),
+    import("https://esm.sh/leaflet.markercluster"),
+  ]);
+  window.L = L;
 
+  // 2. 데이터 포맷팅
+  const rowCount = series.fields[0].values.length;
+  const formattedData = [];
+  for (let i = 0; i < rowCount; i++) {
+    let row = {};
+    series.fields.forEach(
+      (f) => (row[f.name] = f.values.buffer ? f.values.buffer[i] : f.values[i]),
+    );
+    formattedData.push(row);
+  }
+  const data = [formattedData];
+
+  // --- 기존 스타일 및 로직 보존 ---
   const googleMapLayer = "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}";
   const mapAttribution =
     "Image &copy;TerraMetrics, Map Data &copy;TMap Mobility";
 
-  // 변수 불러오기
   const selectedSensor = grafana.replaceVariables("${Sensor}");
   const removeMarker = grafana.replaceVariables("${MapMarker:text}");
-
   const removeFilter = data[0].filter(
     (x) => !removeMarker.includes(x.device_id),
   );
 
-  // 패널 높이 조절
   grafana.locationService.partial(
     { "var-Height": element?.clientHeight - 20 },
     true,
@@ -30,11 +46,7 @@ export function renderMap(context, L) {
         loc.geometry.coordinates[1] === feature.geometry.coordinates[1]
       );
     });
-
     if (!filter) return null;
-    const locData = JSON.parse(filter.location);
-    if (!locData.geometry.coordinates[0] || !locData.geometry.coordinates[1])
-      return null;
 
     const changeType = (type, connected, selected) => {
       const prefix = "fa";
@@ -46,13 +58,11 @@ export function renderMap(context, L) {
         default: "cube",
       };
       const icon = config[type] || config.default;
-
       if (connected) {
         markerColor = selected ? "orange" : "beige";
       } else {
         markerColor = selected ? "gray" : "lightgray";
       }
-
       return { icon, markerColor, prefix };
     };
 
@@ -74,28 +84,20 @@ export function renderMap(context, L) {
     return L.marker(latlng, { icon: L.AwesomeMarkers.icon(customIcon) });
   };
 
-  if (element.leafletMap) {
-    element.leafletMap.remove();
-  }
-
+  if (element.leafletMap) element.leafletMap.remove();
   const map = L.map(element, {
     scrollWheelZoom: true,
     zoomControl: true,
     dragging: true,
   });
-
   element.leafletMap = map;
 
   const bounds = removeFilter
     .map((res) => {
       const loc = JSON.parse(res.location);
-      return loc.geometry.coordinates[0] !== 0 &&
-        loc.geometry.coordinates[1] !== 0
-        ? [loc.geometry.coordinates[1], loc.geometry.coordinates[0]]
-        : null;
+      return [loc.geometry.coordinates[1], loc.geometry.coordinates[0]];
     })
-    .filter((b) => b !== null);
-
+    .filter((b) => b[0] !== 0);
   if (bounds.length > 0) {
     map.fitBounds(bounds);
     const zoom = map.getZoom();
@@ -107,7 +109,6 @@ export function renderMap(context, L) {
     maxZoom: 18,
   }).addTo(map);
 
-  const geojson = removeFilter.map((res) => JSON.parse(res.location));
   const markers = L.markerClusterGroup({
     polygonOptions: {
       fillColor: "#ffefc4",
@@ -126,9 +127,7 @@ export function renderMap(context, L) {
           const loc = JSON.parse(res.location);
           return (
             loc.geometry.coordinates[0] ===
-              marker.feature.geometry.coordinates[0] &&
-            loc.geometry.coordinates[1] ===
-              marker.feature.geometry.coordinates[1]
+            marker.feature.geometry.coordinates[0]
           );
         });
         if (device) {
@@ -154,36 +153,21 @@ export function renderMap(context, L) {
                  ${selectedStatusIcon}
                </div>`,
         className: "leaflet-cluster-icon",
-        iconSize: L.point(40, 40),
+        iconSize: [40, 40],
       });
     },
   });
 
-  const markerLayer = L.geoJSON(geojson, {
-    pointToLayer: (feature, latlng) => pointToLayer(feature, latlng),
-  });
-
-  markers.addLayer(markerLayer);
+  markers.addLayer(
+    L.geoJSON(
+      removeFilter.map((res) => JSON.parse(res.location)),
+      { pointToLayer },
+    ),
+  );
   map.addLayer(markers);
 
-  // 변수 변경 로직 수정
-  markers.bindPopup(function (layer) {
-    const filter = data[0].find((res) => {
-      const loc = JSON.parse(res.location);
-      return (
-        loc.geometry.coordinates[0] === layer.feature.geometry.coordinates[0] &&
-        loc.geometry.coordinates[1] === layer.feature.geometry.coordinates[1]
-      );
-    });
-    if (filter) {
-      // 값이 다를 때만 업데이트하여 무한 루프 방지
-      if (selectedSensor !== filter.device_id) {
-        grafana.locationService.partial({ Sensor: filter.device_id }, true);
-      }
-    }
-  });
-
-  markers.on("mouseover", function (e) {
+  // [수정] 클릭 시 팝업을 띄우지 않고 변수만 변경 (기존 로직 복구)
+  markers.on("click", function (e) {
     const filter = data[0].find((res) => {
       const loc = JSON.parse(res.location);
       return (
@@ -192,10 +176,22 @@ export function renderMap(context, L) {
         loc.geometry.coordinates[1] === e.layer.feature.geometry.coordinates[1]
       );
     });
+    if (filter && selectedSensor !== filter.device_id) {
+      grafana.locationService.partial({ Sensor: filter.device_id }, true);
+    }
+  });
+
+  // [유지] 마우스 오버 시에만 팝업 표시
+  markers.on("mouseover", function (e) {
+    const filter = data[0].find(
+      (res) =>
+        JSON.parse(res.location).geometry.coordinates[0] ===
+        e.layer.feature.geometry.coordinates[0],
+    );
     if (filter) {
       e.layer
         .bindPopup(
-          `<p style="text-align: center; line-height: 1.2; color: black;"><b>Alias : ${filter.alias || "null"}</b><br><b>Type : ${filter.device_type || "null"}</b></p>`,
+          `<p style="text-align: center; line-height: 1.5; color: black;"><b>Alias : ${filter.alias || "null"}</b><br><b>Type : ${filter.device_type || "null"}</b></p>`,
         )
         .openPopup();
     }
@@ -204,9 +200,8 @@ export function renderMap(context, L) {
   markers.on("mouseout", (e) => e.layer.closePopup());
 
   markers.on("clustermouseover", function (e) {
-    const childMarkers = e.layer.getAllChildMarkers();
     let connectedCount = 0;
-    childMarkers.forEach((m) => {
+    e.layer.getAllChildMarkers().forEach((m) => {
       const dev = data[0].find(
         (d) =>
           JSON.parse(d.location).geometry.coordinates[0] ===
