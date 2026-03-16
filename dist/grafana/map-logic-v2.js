@@ -108,7 +108,8 @@ export function renderMap(context, L) {
     element.leafletMap.remove();
   }
 
-  const map = L.map(element.querySelector("#leaflet") || "leaflet", {
+  const map = L.map(element, {
+    // 넘겨받은 element(div)를 직접 사용
     scrollWheelZoom: true,
     zoomControl: true,
     dragging: true,
