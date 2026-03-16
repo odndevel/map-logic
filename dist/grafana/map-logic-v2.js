@@ -1,16 +1,18 @@
 /**
- * Grafana HTML Graphics - Leaflet Map Logic (클릭 팝업 제거 버전)
+ * Grafana HTML Graphics - Leaflet Map Logic (ReferenceError 수정)
  */
 export async function renderMap({ series, grafana, element }) {
-  // 1. 라이브러리 동적 로드
-  const [{ default: L }] = await Promise.all([
-    import("https://esm.sh/leaflet"),
+  // 1. Leaflet 코어 로드 및 전역 할당 (가장 중요)
+  const { default: L } = await import("https://esm.sh/leaflet");
+  window.L = L; // 플러그인들이 L을 참조할 수 있도록 전역에 할당
+
+  // 2. L이 정의된 후 플러그인들을 병렬 로드
+  await Promise.all([
     import("https://esm.sh/leaflet.awesome-markers"),
     import("https://esm.sh/leaflet.markercluster"),
   ]);
-  window.L = L;
 
-  // 2. 데이터 포맷팅
+  // 3. 데이터 포맷팅
   const rowCount = series.fields[0].values.length;
   const formattedData = [];
   for (let i = 0; i < rowCount; i++) {
@@ -22,7 +24,7 @@ export async function renderMap({ series, grafana, element }) {
   }
   const data = [formattedData];
 
-  // --- 기존 스타일 및 로직 보존 ---
+  // --- 형진 님 원본 스타일링 로직 시작 (절대 수정 없음) ---
   const googleMapLayer = "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}";
   const mapAttribution =
     "Image &copy;TerraMetrics, Map Data &copy;TMap Mobility";
@@ -166,7 +168,7 @@ export async function renderMap({ series, grafana, element }) {
   );
   map.addLayer(markers);
 
-  // [수정] 클릭 시 팝업을 띄우지 않고 변수만 변경 (기존 로직 복구)
+  // 클릭 이벤트 (변수 변경)
   markers.on("click", function (e) {
     const filter = data[0].find((res) => {
       const loc = JSON.parse(res.location);
@@ -181,7 +183,7 @@ export async function renderMap({ series, grafana, element }) {
     }
   });
 
-  // [유지] 마우스 오버 시에만 팝업 표시
+  // 마우스 오버 팝업
   markers.on("mouseover", function (e) {
     const filter = data[0].find(
       (res) =>
