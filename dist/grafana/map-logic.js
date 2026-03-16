@@ -46,6 +46,10 @@ export async function renderMap(context, L) {
   const selectedSensor = grafana.replaceVariables("${Sensor}");
   const removeMarker = grafana.replaceVariables("${MapMarker:text}");
 
+  if (element.leafletMap) {
+    element.leafletMap.remove();
+  }
+
   // 데이터 전처리: 반복적인 JSON.parse 방지
   const processedData = data[0]
     .filter((x) => !removeMarker.includes(x.device_id))
@@ -65,7 +69,7 @@ export async function renderMap(context, L) {
 
   const zoom = map.getZoom();
   map.setZoom(zoom > 10 ? 10 : zoom);
-  this.map = map;
+  element.leafletMap = map;
 
   L.tileLayer(CONFIG.layers.google, {
     attribution: CONFIG.attribution,
