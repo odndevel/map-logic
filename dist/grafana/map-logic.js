@@ -1,7 +1,6 @@
 /**
  * Grafana Business Text - Leaflet Map Logic
  */
-
 export function renderMap(context, L) {
   const { data, grafana, element } = context;
 
@@ -48,6 +47,15 @@ export function renderMap(context, L) {
 
     if (findGpsError) return null;
 
+    /**
+     * 사용 가능한 마커 색상:
+     * 'red', 'darkred', 'orange', 'green', 'darkgreen', 'blue', 'purple', 'darkpurple',
+     * 'cadetblue', 'beige', 'white', 'pink', 'lightblue', 'lightgreen', 'gray', 'black', 'lightgray'
+     *
+     * 사용 가능한 아이콘 (Font Awesome prefix 'fa' 사용 시):
+     * 'home', 'user', 'flag', 'info-circle', 'exclamation-triangle', 'check', 'cube',
+     * 'life-ring', 'archive', 'briefcase', 'bolt', 'camera', 'microchip', 등 Font Awesome 아이콘명
+     */
     const changeType = (type, connected, selected) => {
       const prefix = "fa";
       let markerColor = "gray";
