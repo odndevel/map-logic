@@ -48,7 +48,16 @@ export async function renderMap({ series, grafana, element }) {
         loc.geometry.coordinates[1] === feature.geometry.coordinates[1]
       );
     });
+
     if (!filter) return null;
+    const locData = JSON.parse(filter.location);
+    const findGpsError =
+      (locData.geometry.coordinates[0] === 0 ||
+        locData.geometry.coordinates[0] === null) &&
+      (locData.geometry.coordinates[1] === 0 ||
+        locData.geometry.coordinates[1] === null);
+
+    if (findGpsError) return null;
 
     const changeType = (type, connected, selected) => {
       const prefix = "fa";
