@@ -14,12 +14,10 @@ export function renderMap(context, L) {
   const selectedSensor = grafana.replaceVariables("${Sensor}");
   const removeMarker = grafana.replaceVariables("${MapMarker:text}");
 
-  // 데이터 필터링 (원본 로직 유지)
   const removeFilter = data[0].filter(
     (x) => !removeMarker.includes(x.device_id),
   );
 
-  // 패널 높이 조절
   grafana.locationService.partial(
     {
       "var-Height": element.parentElement.parentElement.clientHeight - 20,
@@ -27,7 +25,6 @@ export function renderMap(context, L) {
     true,
   );
 
-  // pointToLayer 함수 (원본 로직 유지)
   const pointToLayer = (feature, latlng) => {
     const filter = removeFilter.find((res) => {
       const loc = JSON.parse(res.location);
@@ -101,9 +98,6 @@ export function renderMap(context, L) {
     return L.marker(latlng, { icon: L.AwesomeMarkers.icon(customIcon) });
   };
 
-  /**
-   * Cleanup & Initialize (this.map 에러 해결)
-   */
   if (element.leafletMap) {
     element.leafletMap.remove();
   }
@@ -114,7 +108,7 @@ export function renderMap(context, L) {
     dragging: true,
   });
 
-  element.leafletMap = map; // element에 저장하여 cleanup 시 사용
+  element.leafletMap = map;
 
   // fitBounds (원본 로직 유지)
   const bounds = removeFilter

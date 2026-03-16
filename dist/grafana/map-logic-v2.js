@@ -2,17 +2,14 @@
  * Grafana HTML Graphics - Leaflet Map Logic (ReferenceError 수정)
  */
 export async function renderMap({ series, grafana, element }) {
-  // 1. Leaflet 코어 로드 및 전역 할당 (가장 중요)
   const { default: L } = await import("https://esm.sh/leaflet");
-  window.L = L; // 플러그인들이 L을 참조할 수 있도록 전역에 할당
+  window.L = L;
 
-  // 2. L이 정의된 후 플러그인들을 병렬 로드
   await Promise.all([
     import("https://esm.sh/leaflet.awesome-markers"),
     import("https://esm.sh/leaflet.markercluster"),
   ]);
 
-  // 3. 데이터 포맷팅
   const rowCount = series.fields[0].values.length;
   const formattedData = [];
   for (let i = 0; i < rowCount; i++) {
@@ -24,7 +21,6 @@ export async function renderMap({ series, grafana, element }) {
   }
   const data = [formattedData];
 
-  // --- 형진 님 원본 스타일링 로직 시작 (절대 수정 없음) ---
   const googleMapLayer = "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}";
   const mapAttribution =
     "Image &copy;TerraMetrics, Map Data &copy;TMap Mobility";
@@ -59,6 +55,15 @@ export async function renderMap({ series, grafana, element }) {
 
     if (findGpsError) return null;
 
+    /**
+     * 사용 가능한 마커 색상:
+     * 'red', 'darkred', 'orange', 'green', 'darkgreen', 'blue', 'purple', 'darkpurple',
+     * 'cadetblue', 'beige', 'white', 'pink', 'lightblue', 'lightgreen', 'gray', 'black', 'lightgray'
+     *
+     * 사용 가능한 아이콘 (Font Awesome prefix 'fa' 사용 시):
+     * 'home', 'user', 'flag', 'info-circle', 'exclamation-triangle', 'check', 'cube',
+     * 'life-ring', 'archive', 'briefcase', 'bolt', 'camera', 'microchip', 등 Font Awesome 아이콘명
+     */
     const changeType = (type, connected, selected) => {
       const prefix = "fa";
       let markerColor = "gray";
