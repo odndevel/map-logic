@@ -11,7 +11,7 @@
 > 현재 해당 플러그인을 개발한 팀의 해체로 인해 추가 유지보수 X
 
 <details>
-<summary markdown="span">적용 코드</summary>
+<summary markdown="span">대시보드 프로비저닝 코드</summary>
 
 - PC 패널 포지션, 사이즈 설정
 
@@ -188,7 +188,7 @@
 > 해당 코드는 HTML graphics 플러그인 사용에 대한 코드
 
 <details>
-<summary markdown="span">적용 코드</summary>
+<summary markdown="span">대시보드 프로비저닝 코드</summary>
 
 - PC 패널 포지션, 사이즈 설정
 
