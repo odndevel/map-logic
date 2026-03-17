@@ -69,7 +69,7 @@
   "id": 100,
   "interval": "5m",
   "options": {
-    "afterRender": "const run = async () => {\n  // 라이브러리 로드\n  const { default: L } = await import(\"https://esm.sh/leaflet\");\n  window.L = L; // AwesomeMarkers 등을 위해 전역 할당\n  await import(\"https://esm.sh/leaflet.awesome-markers\");\n  await import(\"https://esm.sh/leaflet.markercluster\");\n\n  // 내 외부 파일 로드\n  const url = `https://odndevel.github.io/map-logic/dist/grafana/map-logic.js?v=${new Date().getTime()}`;\n  const { renderMap } = await import(url);\n\n  renderMap(context, L);\n};\n\nrun().catch(console.error);",
+    "afterRender": "const run = async () => {\n  // 라이브러리 로드\n  const { default: L } = await import(\"https://esm.sh/leaflet\");\n  window.L = L; // AwesomeMarkers 등을 위해 전역 할당\n  await import(\"https://esm.sh/leaflet.awesome-markers\");\n  await import(\"https://esm.sh/leaflet.markercluster\");\n\n  // 내 외부 파일 로드\n  const url = `https://cdn.jsdelivr.net/gh/odndevel/map-logic@main/dist/grafana/map-logic.js`;\n  const { renderMap } = await import(url);\n\n  renderMap(context, L);\n};\n\nrun().catch(console.error);",
     "content": "<!-- <div class=\"weather-icon\">\n  <img src=\"https://openweathermap.org/img/wn/50d@2x.png\"/>\n</div> -->\n\n<!-- <div class=\"status\">\n  <div class=\"status-icon\">\n    <span>Box Type</span>\n    <img src=\"https://odn-grafana-image-bucket.s3.ap-northeast-2.amazonaws.com/marker/connected-box.png\"></img>\n  </div>\n\n  <div class=\"status-icon\">\n    <span>Buoy Type</span>\n    <img src=\"https://odn-grafana-image-bucket.s3.ap-northeast-2.amazonaws.com/marker/connected-buoy.png\"></img>\n  </div>\n\n  <div class=\"status-icon\">\n    <span>Portable Type</span>\n    <img src=\"https://odn-grafana-image-bucket.s3.ap-northeast-2.amazonaws.com/marker/connected-portable.png\"></img>\n  </div>\n</div> -->\n\n<div id=\"leaflet\"></div>\n\n<!-- https://code.ionicframework.com/ionicons/1.5.2/css/ionicons.min.css -->",
     "contentPartials": [],
     "defaultContent": "The query didn't return any results.",
@@ -262,7 +262,7 @@
     "html": "<div id=\"leaflet\"></div>",
     "onInit": "// Sets the text from customProperties\nconst htmlgraphicsText = htmlNode.getElementById('htmlgraphics-text');\n\nif (htmlgraphicsText) {\n  htmlgraphicsText.textContent = customProperties.text;\n\n  // Change the text color based on the theme\n  if (theme.isDark) {\n    htmlgraphicsText.style.color = 'green';\n  } else {\n    htmlgraphicsText.style.color = 'red';\n  }\n}\n",
     "onInitOnResize": false,
-    "onRender": "const runMap = async () => {\n  if (!data?.series?.[0]) return;\n\n  const url = `https://odndevel.github.io/map-logic/dist/grafana/map-logic-v2.js?v=${Date.now()}`;\n  const { renderMap } = await import(url);\n\n  const mapElement = htmlNode.querySelector(\"#leaflet\");\n  if (!mapElement) return;\n\n  renderMap({\n    series: data.series[0], \n    grafana: {\n      replaceVariables: (str) => getTemplateSrv().replace(str),\n      locationService: {\n        partial: (params, replace = true) => {\n          const formattedParams = {};\n          for (const key in params) {\n            const cleanKey = key.replace('var-', '');\n            formattedParams[`var-${cleanKey}`] = params[key];\n          }\n          if (htmlGraphics.locationService?.partial) {\n            htmlGraphics.locationService.partial(formattedParams, replace);\n          }\n        }\n      }\n    },\n    element: mapElement\n  });\n};\n\nrunMap().catch(console.error);\nhtmlNode.addEventListener('panelupdate', runMap);",
+    "onRender": "const runMap = async () => {\n  if (!data?.series?.[0]) return;\n\n  const url = `https://cdn.jsdelivr.net/gh/odndevel/map-logic@main/dist/grafana/map-logic-v2.js`;\n  const { renderMap } = await import(url);\n\n  const mapElement = htmlNode.querySelector(\"#leaflet\");\n  if (!mapElement) return;\n\n  renderMap({\n    series: data.series[0], \n    grafana: {\n      replaceVariables: (str) => getTemplateSrv().replace(str),\n      locationService: {\n        partial: (params, replace = true) => {\n          const formattedParams = {};\n          for (const key in params) {\n            const cleanKey = key.replace('var-', '');\n            formattedParams[`var-${cleanKey}`] = params[key];\n          }\n          if (htmlGraphics.locationService?.partial) {\n            htmlGraphics.locationService.partial(formattedParams, replace);\n          }\n        }\n      }\n    },\n    element: mapElement\n  });\n};\n\nrunMap().catch(console.error);\nhtmlNode.addEventListener('panelupdate', runMap);",
     "overflow": "visible",
     "panelupdateOnMount": true,
     "reduceOptions": {
@@ -330,3 +330,15 @@
 ```
 
 </details>
+
+### Development
+
+- 개발용(로컬) Grafana의 맵 패널 편집을 통해 진행
+- 기존의 CDN URL -> localhost:5500으로 변경
+  - VS Code의 Extension [Live Server](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) 사용
+  - VS Code Setting 수정 필요
+    ```json
+    {
+      "liveServer.settings.headers": { "Access-Control-Allow-Origin": "*" }
+    }
+    ```
