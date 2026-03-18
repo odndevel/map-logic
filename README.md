@@ -1,7 +1,9 @@
 ## Guide
 
-> [!WARNING]
+> [!IMPORTANT]
 > 기존에 사용 중인 그라파나 인프라, Datasource 등이 준비되어 있는 상태에서 사용 가능
+>
+> 기존의 GitHub Page 사용에서 [jsDelivr](https://www.jsdelivr.com/github)로 CDN 링크 변경
 
 ### map-logic.js
 
@@ -25,6 +27,7 @@
   ```
 
 - Mobile 패널 포지션, 사이즈 설정
+
   ```json
   "gridPos": {
     "h": 10,
@@ -202,6 +205,7 @@
   ```
 
 - Mobile 패널 포지션, 사이즈 설정
+
   ```json
   "gridPos": {
     "h": 10,
