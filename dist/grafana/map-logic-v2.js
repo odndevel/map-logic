@@ -1,106 +1,55 @@
 /**
- * Grafana HTML Graphics - Leaflet Map Logic (ReferenceError 수정)
+ * Grafana HTML Graphics - Leaflet Map Logic (Optimized)
  */
 export async function renderMap({ series, grafana, element }) {
+  // 1. 외부 라이브러리 로드
   const { default: L } = await import("https://esm.sh/leaflet");
   window.L = L;
-
   await Promise.all([
     import("https://esm.sh/leaflet.awesome-markers"),
     import("https://esm.sh/leaflet.markercluster"),
   ]);
 
-  const rowCount = series.fields[0].values.length;
-  const formattedData = [];
-  for (let i = 0; i < rowCount; i++) {
-    let row = {};
-    series.fields.forEach(
-      (f) => (row[f.name] = f.values.buffer ? f.values.buffer[i] : f.values[i]),
-    );
-    formattedData.push(row);
-  }
-  const data = [formattedData];
-
-  const googleMapLayer = "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}";
-  const mapAttribution =
-    "Image &copy;TerraMetrics, Map Data &copy;TMap Mobility";
-
+  // 2. 데이터 전처리 (단 한 번의 순회로 파싱 및 필터링 완료)
   const selectedSensor = grafana.replaceVariables("${Sensor}");
   const removeMarker = grafana.replaceVariables("${MapMarker:text}");
-  const removeFilter = data[0].filter(
-    (x) => !removeMarker.includes(x.device_id),
-  );
 
-  grafana.locationService.partial(
-    { "var-Height": element?.clientHeight - 20 },
-    true,
-  );
+  const processedData = [];
+  const deviceMap = new Map(); // 빠른 검색을 위한 Map
 
-  const pointToLayer = (feature, latlng) => {
-    const filter = removeFilter.find((res) => {
-      const loc = JSON.parse(res.location);
-      return (
-        loc.geometry.coordinates[0] === feature.geometry.coordinates[0] &&
-        loc.geometry.coordinates[1] === feature.geometry.coordinates[1]
-      );
-    });
+  const fields = series.fields;
+  const rowCount = fields[0].values.length;
 
-    if (!filter) return null;
-    const locData = JSON.parse(filter.location);
-    const findGpsError =
-      (locData.geometry.coordinates[0] === 0 ||
-        locData.geometry.coordinates[0] === null) &&
-      (locData.geometry.coordinates[1] === 0 ||
-        locData.geometry.coordinates[1] === null);
+  for (let i = 0; i < rowCount; i++) {
+    const row = {};
+    for (const f of fields) {
+      row[f.name] = f.values.buffer ? f.values.buffer[i] : f.values[i];
+    }
 
-    if (findGpsError) return null;
+    // JSON 파싱 미리 수행
+    try {
+      row.parsedLocation = JSON.parse(row.location);
+    } catch (e) {
+      continue;
+    }
 
-    /**
-     * 사용 가능한 마커 색상:
-     * 'red', 'darkred', 'orange', 'green', 'darkgreen', 'blue', 'purple', 'darkpurple',
-     * 'cadetblue', 'beige', 'white', 'pink', 'lightblue', 'lightgreen', 'gray', 'black', 'lightgray'
-     *
-     * 사용 가능한 아이콘 (Font Awesome prefix 'fa' 사용 시):
-     * 'home', 'user', 'flag', 'info-circle', 'exclamation-triangle', 'check', 'cube',
-     * 'life-ring', 'archive', 'briefcase', 'bolt', 'camera', 'microchip', 등 Font Awesome 아이콘명
-     */
-    const changeType = (type, connected, selected) => {
-      const prefix = "fa";
-      let markerColor = "gray";
-      const config = {
-        mount: "archive",
-        buoy: "life-ring",
-        portable: "briefcase",
-        default: "cube",
-      };
-      const icon = config[type] || config.default;
-      if (connected) {
-        markerColor = selected ? "orange" : "beige";
-      } else {
-        markerColor = selected ? "gray" : "lightgray";
-      }
-      return { icon, markerColor, prefix };
-    };
+    // GPS 에러 및 제외 마커 필터링
+    const coords = row.parsedLocation.geometry.coordinates;
+    const isGpsError = !coords[0] || !coords[1];
+    const isExcluded = removeMarker.includes(row.device_id);
 
-    const iconOptions = {
-      connected: { ...changeType(filter.device_type, true, false) },
-      disconnected: { ...changeType(filter.device_type, false, false) },
-      selectedConnected: { ...changeType(filter.device_type, true, true) },
-      selectedDisconnected: { ...changeType(filter.device_type, false, true) },
-    };
+    if (!isGpsError && !isExcluded) {
+      processedData.push(row);
+      // 좌표 기반 키 생성 (이벤트 검색용)
+      const key = `${coords[0]},${coords[1]}`;
+      deviceMap.set(key, row);
+    }
+  }
 
-    let customIcon = filter.connection
-      ? selectedSensor === filter.device_id
-        ? iconOptions.selectedConnected
-        : iconOptions.connected
-      : selectedSensor === filter.device_id
-        ? iconOptions.selectedDisconnected
-        : iconOptions.disconnected;
-
-    return L.marker(latlng, { icon: L.AwesomeMarkers.icon(customIcon) });
-  };
-
-  if (element.leafletMap) element.leafletMap.remove();
+  // 3. 맵 초기화 및 싱글톤 관리
+  if (element.leafletMap) {
+    element.leafletMap.remove();
+  }
   const map = L.map(element, {
     scrollWheelZoom: true,
     zoomControl: true,
@@ -108,23 +57,47 @@ export async function renderMap({ series, grafana, element }) {
   });
   element.leafletMap = map;
 
-  const bounds = removeFilter
-    .map((res) => {
-      const loc = JSON.parse(res.location);
-      return [loc.geometry.coordinates[1], loc.geometry.coordinates[0]];
-    })
-    .filter((b) => b[0] !== 0);
-  if (bounds.length > 0) {
+  // 4. 지도 뷰 설정
+  if (processedData.length > 0) {
+    const bounds = processedData.map((d) => [
+      d.parsedLocation.geometry.coordinates[1],
+      d.parsedLocation.geometry.coordinates[0],
+    ]);
     map.fitBounds(bounds);
-    const zoom = map.getZoom();
-    map.setZoom(zoom > 10 ? 10 : zoom);
+    if (map.getZoom() > 10) map.setZoom(10);
   }
 
-  L.tileLayer(googleMapLayer, {
-    attribution: mapAttribution,
+  L.tileLayer("https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
+    attribution: "Image &copy;TerraMetrics, Map Data &copy;TMap Mobility",
     maxZoom: 18,
   }).addTo(map);
 
+  // 5. 마커 아이콘 로직 (기존 스타일 유지)
+  const getIconSettings = (device) => {
+    const isSelected = selectedSensor === device.device_id;
+    const isConnected = device.connection;
+    const type = device.device_type;
+
+    const config = {
+      mount: "archive",
+      buoy: "life-ring",
+      portable: "briefcase",
+      default: "cube",
+    };
+    const icon = config[type] || config.default;
+
+    let markerColor = isConnected
+      ? isSelected
+        ? "orange"
+        : "beige"
+      : isSelected
+        ? "gray"
+        : "lightgray";
+
+    return { icon, markerColor, prefix: "fa" };
+  };
+
+  // 6. 클러스터 설정
   const markers = L.markerClusterGroup({
     polygonOptions: {
       fillColor: "#ffefc4",
@@ -132,28 +105,18 @@ export async function renderMap({ series, grafana, element }) {
       opacity: 1,
       fillOpacity: 0.5,
     },
-    iconCreateFunction: function (cluster) {
+    iconCreateFunction: (cluster) => {
       const childMarkers = cluster.getAllChildMarkers();
       let connectedCount = 0;
       let hasSelectedMarker = false;
       let selectedMarkerStatus = "disconnected";
 
-      childMarkers.forEach((marker) => {
-        const device = data[0].find((res) => {
-          const loc = JSON.parse(res.location);
-          return (
-            loc.geometry.coordinates[0] ===
-            marker.feature.geometry.coordinates[0]
-          );
-        });
-        if (device) {
-          if (device.connection) connectedCount++;
-          if (device.device_id === selectedSensor) {
-            hasSelectedMarker = true;
-            selectedMarkerStatus = device.connection
-              ? "connected"
-              : "disconnected";
-          }
+      childMarkers.forEach((m) => {
+        const d = m.options.deviceData; // 저장된 데이터 사용
+        if (d.connection) connectedCount++;
+        if (d.device_id === selectedSensor) {
+          hasSelectedMarker = true;
+          selectedMarkerStatus = d.connection ? "connected" : "disconnected";
         }
       });
 
@@ -174,40 +137,41 @@ export async function renderMap({ series, grafana, element }) {
     },
   });
 
-  markers.addLayer(
-    L.geoJSON(
-      removeFilter.map((res) => JSON.parse(res.location)),
-      { pointToLayer },
-    ),
+  // 7. GeoJSON 레이어 생성 및 추가
+  const geoLayer = L.geoJSON(
+    processedData.map((d) => d.parsedLocation),
+    {
+      pointToLayer: (feature, latlng) => {
+        const coords = feature.geometry.coordinates;
+        const device = deviceMap.get(`${coords[0]},${coords[1]}`);
+        if (!device) return null;
+
+        const iconOptions = getIconSettings(device);
+        return L.marker(latlng, {
+          icon: L.AwesomeMarkers.icon(iconOptions),
+          deviceData: device, // 마커 객체에 데이터 직접 할당 (성능 최적화)
+        });
+      },
+    },
   );
+
+  markers.addLayer(geoLayer);
   map.addLayer(markers);
 
-  // 클릭 이벤트 (변수 변경)
-  markers.on("click", function (e) {
-    const filter = data[0].find((res) => {
-      const loc = JSON.parse(res.location);
-      return (
-        loc.geometry.coordinates[0] ===
-          e.layer.feature.geometry.coordinates[0] &&
-        loc.geometry.coordinates[1] === e.layer.feature.geometry.coordinates[1]
-      );
-    });
-    if (filter && selectedSensor !== filter.device_id) {
-      grafana.locationService.partial({ Sensor: filter.device_id }, true);
+  // 8. 이벤트 리스너 (기존 로직 유지 + Map 검색으로 성능 향상)
+  markers.on("click", (e) => {
+    const device = e.layer.options.deviceData;
+    if (device && selectedSensor !== device.device_id) {
+      grafana.locationService.partial({ Sensor: device.device_id }, true);
     }
   });
 
-  // 마우스 오버 팝업
-  markers.on("mouseover", function (e) {
-    const filter = data[0].find(
-      (res) =>
-        JSON.parse(res.location).geometry.coordinates[0] ===
-        e.layer.feature.geometry.coordinates[0],
-    );
-    if (filter) {
+  markers.on("mouseover", (e) => {
+    const device = e.layer.options.deviceData;
+    if (device) {
       e.layer
         .bindPopup(
-          `<p style="text-align: center; line-height: 1.5; color: black;"><b>Alias : ${filter.alias || "null"}</b><br><b>Type : ${filter.device_type || "null"}</b></p>`,
+          `<p style="text-align: center; line-height: 1.5; color: black;"><b>Alias : ${device.alias || "null"}</b><br><b>Type : ${device.device_type || "null"}</b></p>`,
         )
         .openPopup();
     }
@@ -215,16 +179,11 @@ export async function renderMap({ series, grafana, element }) {
 
   markers.on("mouseout", (e) => e.layer.closePopup());
 
-  markers.on("clustermouseover", function (e) {
-    let connectedCount = 0;
-    e.layer.getAllChildMarkers().forEach((m) => {
-      const dev = data[0].find(
-        (d) =>
-          JSON.parse(d.location).geometry.coordinates[0] ===
-          m.feature.geometry.coordinates[0],
-      );
-      if (dev?.connection) connectedCount++;
-    });
+  markers.on("clustermouseover", (e) => {
+    const connectedCount = e.layer
+      .getAllChildMarkers()
+      .filter((m) => m.options.deviceData?.connection).length;
+
     e.layer
       .bindPopup(
         `<p style="text-align: center; color: black;"><b>Connected : ${connectedCount}</b></p>`,
@@ -233,5 +192,11 @@ export async function renderMap({ series, grafana, element }) {
   });
 
   markers.on("clustermouseout", (e) => e.layer.closePopup());
+
+  // 9. Grafana UI 보정
+  grafana.locationService.partial(
+    { "var-Height": (element?.clientHeight || 0) - 20 },
+    true,
+  );
   setTimeout(() => map.invalidateSize(), 200);
 }
