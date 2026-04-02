@@ -1,8 +1,4 @@
-/**
- * Grafana HTML Graphics - Leaflet Map Logic (Optimized)
- */
 export async function renderMap({ series, grafana, element }) {
-  // 1. 외부 라이브러리 로드
   const { default: L } = await import("https://esm.sh/leaflet");
   window.L = L;
   await Promise.all([
@@ -10,12 +6,11 @@ export async function renderMap({ series, grafana, element }) {
     import("https://esm.sh/leaflet.markercluster"),
   ]);
 
-  // 2. 데이터 전처리 (단 한 번의 순회로 파싱 및 필터링 완료)
   const selectedSensor = grafana.replaceVariables("${Sensor}");
   const removeMarker = grafana.replaceVariables("${MapMarker:text}");
 
   const processedData = [];
-  const deviceMap = new Map(); // 빠른 검색을 위한 Map
+  const deviceMap = new Map();
 
   const fields = series.fields;
   const rowCount = fields[0].values.length;
@@ -26,27 +21,23 @@ export async function renderMap({ series, grafana, element }) {
       row[f.name] = f.values.buffer ? f.values.buffer[i] : f.values[i];
     }
 
-    // JSON 파싱 미리 수행
     try {
       row.parsedLocation = JSON.parse(row.location);
     } catch (e) {
       continue;
     }
 
-    // GPS 에러 및 제외 마커 필터링
     const coords = row.parsedLocation.geometry.coordinates;
     const isGpsError = !coords[0] || !coords[1];
     const isExcluded = removeMarker.includes(row.device_id);
 
     if (!isGpsError && !isExcluded) {
       processedData.push(row);
-      // 좌표 기반 키 생성 (이벤트 검색용)
       const key = `${coords[0]},${coords[1]}`;
       deviceMap.set(key, row);
     }
   }
 
-  // 3. 맵 초기화 및 싱글톤 관리
   if (element.leafletMap) {
     element.leafletMap.remove();
   }
@@ -57,7 +48,6 @@ export async function renderMap({ series, grafana, element }) {
   });
   element.leafletMap = map;
 
-  // 4. 지도 뷰 설정
   if (processedData.length > 0) {
     const bounds = processedData.map((d) => [
       d.parsedLocation.geometry.coordinates[1],
@@ -72,7 +62,6 @@ export async function renderMap({ series, grafana, element }) {
     maxZoom: 18,
   }).addTo(map);
 
-  // 5. 마커 아이콘 로직 (기존 스타일 유지)
   const getIconSettings = (device) => {
     const isSelected = selectedSensor === device.device_id;
     const isConnected = device.connection;
@@ -97,7 +86,6 @@ export async function renderMap({ series, grafana, element }) {
     return { icon, markerColor, prefix: "fa" };
   };
 
-  // 6. 클러스터 설정
   const markers = L.markerClusterGroup({
     polygonOptions: {
       fillColor: "#ffefc4",
@@ -112,7 +100,7 @@ export async function renderMap({ series, grafana, element }) {
       let selectedMarkerStatus = "disconnected";
 
       childMarkers.forEach((m) => {
-        const d = m.options.deviceData; // 저장된 데이터 사용
+        const d = m.options.deviceData;
         if (d.connection) connectedCount++;
         if (d.device_id === selectedSensor) {
           hasSelectedMarker = true;
@@ -137,7 +125,6 @@ export async function renderMap({ series, grafana, element }) {
     },
   });
 
-  // 7. GeoJSON 레이어 생성 및 추가
   const geoLayer = L.geoJSON(
     processedData.map((d) => d.parsedLocation),
     {
@@ -149,7 +136,7 @@ export async function renderMap({ series, grafana, element }) {
         const iconOptions = getIconSettings(device);
         return L.marker(latlng, {
           icon: L.AwesomeMarkers.icon(iconOptions),
-          deviceData: device, // 마커 객체에 데이터 직접 할당 (성능 최적화)
+          deviceData: device,
         });
       },
     },
@@ -158,7 +145,6 @@ export async function renderMap({ series, grafana, element }) {
   markers.addLayer(geoLayer);
   map.addLayer(markers);
 
-  // 8. 이벤트 리스너 (기존 로직 유지 + Map 검색으로 성능 향상)
   markers.on("click", (e) => {
     const device = e.layer.options.deviceData;
     if (device && selectedSensor !== device.device_id) {
@@ -193,7 +179,6 @@ export async function renderMap({ series, grafana, element }) {
 
   markers.on("clustermouseout", (e) => e.layer.closePopup());
 
-  // 9. Grafana UI 보정
   grafana.locationService.partial(
     { "var-Height": (element?.clientHeight || 0) - 20 },
     true,
