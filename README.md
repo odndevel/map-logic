@@ -346,3 +346,5 @@
       "liveServer.settings.headers": { "Access-Control-Allow-Origin": "*" }
     }
     ```
+- 코드 수정 후 즉시 캐시 삭제/갱신
+  [Purge jsDelivr CDN cache](https://www.jsdelivr.com/tools/purge) -> 해당 링크 사용
