@@ -114,14 +114,23 @@ export async function renderMap({ series, grafana, element }) {
         ? `<div style="position: absolute; top: -5px; right: -5px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid white; background: ${selectedMarkerStatus === "connected" ? "rgb(255, 128, 0)" : "#575757"}; z-index: 10;"></div>`
         : "";
 
-      return L.divIcon({
-        html: `<div style="position: relative; width: 40px; height: 40px; background: conic-gradient(rgb(255, 128, 0) 0% ${connectedPercent}%, #575757 ${connectedPercent}% 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid white;">
-                 <div style="background: ${100 - connectedPercent === 100 ? `white` : `rgb(255, 239, 196)`}; width: 60%; height: 60%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; color: black !important;">${totalCount}</div>
-                 ${selectedStatusIcon}
-               </div>`,
-        className: "leaflet-cluster-icon",
-        iconSize: [40, 40],
-      });
+      // Extracted helper function for creating the cluster icon
+      const createClusterIcon = () => {
+        const gradientColor =
+          100 - connectedPercent === 100 ? "white" : "rgb(255, 239, 196)";
+        const clusterContent = `<div style="background: ${gradientColor}; width: 60%; height: 60%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; color: black !important;">${totalCount}</div>`;
+
+        return L.divIcon({
+          html: `<div style="position: relative; width: 40px; height: 40px; background: conic-gradient(rgb(255, 128, 0) 0% ${connectedPercent}%, #575757 ${connectedPercent}% 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid white;">
+                   ${clusterContent}
+                   ${selectedStatusIcon}
+                 </div>`,
+          className: "leaflet-cluster-icon",
+          iconSize: [40, 40],
+        });
+      };
+
+      return createClusterIcon();
     },
   });
 
